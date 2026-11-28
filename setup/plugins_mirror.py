@@ -147,7 +147,7 @@ def parse_index(raw=None):  # {{{
 
     dpat = re.compile(r'''(?is)Donate\s*:\s*<a\s+href=['"](.+?)['"]''')
     key_pat = re.compile(r'''(?is)(History|Uninstall)\s*:\s*([^<;]+)[<;]''')
-    seen = {}
+    entries = []
     dep_start = -1
     category_offsets = []
     deprecated_category = 'Deprecated/Renamed/Retired'
@@ -183,11 +183,17 @@ def parse_index(raw=None):  # {{{
                 uninstall = tuple(x.strip() for x in m.group(2).strip().split(','))
 
         thread_id = url_to_plugin_id(url, deprecated)
-        if thread_id in seen:
-            raise ValueError(f'thread_id for {seen[thread_id]} and {name} is the same: {thread_id}')
-        seen[thread_id] = name
-        entry = IndexEntry(name, url, donate, history, uninstall, deprecated, thread_id, category)
-        yield entry
+        entries.append(IndexEntry(name, url, donate, history, uninstall, deprecated, thread_id, category))
+
+    names_by_thread_id = {}
+    for entry in entries:
+        names_by_thread_id.setdefault(entry.thread_id, []).append(entry.name)
+    conflicts = {tid: names for tid, names in names_by_thread_id.items() if len(names) > 1}
+    for thread_id, names in conflicts.items():
+        log(f'Ignoring plugins with the same thread_id ({thread_id}):', ', '.join(names))
+    for entry in entries:
+        if entry.thread_id not in conflicts:
+            yield entry
 
 
 # }}}
